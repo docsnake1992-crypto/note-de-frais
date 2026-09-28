@@ -1,0 +1,124 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Notes de frais</title>
+<style>
+:root{--bg:#f4f6f9;--c:#fff;--t:#1b2430;--m:#6b7785;--p:#1f5eff;--b:#dde3ea}
+@media(prefers-color-scheme:dark){:root{--bg:#10151c;--c:#1a222d;--t:#e8edf3;--m:#93a0af;--b:#2b3644}}
+*{box-sizing:border-box}body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--t);padding-bottom:80px}
+header{padding:16px;font-weight:700;font-size:18px}
+section{display:none;padding:0 12px}section.on{display:block}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:12px;margin-bottom:10px}
+label{display:block;font-size:13px;color:var(--m);margin:10px 0 4px}
+input,select{width:100%;padding:11px;font-size:16px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t)}
+.r{display:flex;gap:8px}.r>*{flex:1}
+button{width:100%;padding:13px;margin-top:12px;font-size:16px;border:0;border-radius:10px;background:var(--p);color:#fff;font-weight:600}
+button.s{background:var(--b);color:var(--t)}button.d{width:auto;margin:0;padding:6px 10px;background:none;color:#d33}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom)}
+nav a{flex:1;text-align:center;padding:14px 0;font-size:13px;color:var(--m)}nav a.on{color:var(--p);font-weight:700}
+.it{display:flex;justify-content:space-between;align-items:center}.m{color:var(--m);font-size:13px}
+#st,#ks{font-size:13px;color:var(--m);margin-top:6px}.big{font-size:22px;font-weight:700}
+img.pv{max-width:100%;border-radius:8px;margin-top:8px}
+@media print{nav,button,header{display:none}section{display:none!important}#l{display:block!important}}
+</style></head><body>
+<header>🧾 Notes de frais</header>
+
+<section id="l" class="on">
+ <div class="card"><div class="m">Total à rembourser</div><div class="big" id="tot">0,00 €</div>
+ <div class="r"><button class="s" onclick="csv()">Export CSV</button><button class="s" onclick="print()">Imprimer</button></div></div>
+ <div id="list"></div>
+</section>
+
+<section id="t"><div class="card">
+ <label>Type</label><select id="ty"><option>Restaurant</option><option>Carburant</option><option>Péage</option><option>Parking</option></select>
+ <label>Date</label><input type="date" id="dt">
+ <label>Photo du ticket</label><input type="file" id="ph" accept="image/*" capture="environment">
+ <img id="pv" class="pv" hidden>
+ <button class="s" onclick="ocr()">🔍 Lire le ticket (OCR)</button><div id="st"></div>
+ <div class="r"><div><label>HT €</label><input id="ht" inputmode="decimal" onchange="fill()"></div>
+ <div><label>TVA €</label><input id="tv" inputmode="decimal" onchange="fill()"></div>
+ <div><label>TTC €</label><input id="tt" inputmode="decimal" onchange="fill()"></div></div>
+ <label>Commentaire (client, motif, convives…)</label><input id="cm">
+ <button onclick="saveT()">Enregistrer</button></div></section>
+
+<section id="k"><div class="card">
+ <label>Date</label><input type="date" id="kd">
+ <label>Adresse de départ</label><input id="a1" placeholder="12 rue de la Paix, Paris">
+ <label>Adresse d'arrivée</label><input id="a2" placeholder="Lyon">
+ <label><input type="checkbox" id="ar" style="width:auto"> Aller-retour</label>
+ <button class="s" onclick="route()">📍 Calculer la distance</button><div id="ks"></div>
+ <label>Kilomètres (modifiables)</label><input id="km" inputmode="decimal" oninput="ik()">
+ <label>Motif du déplacement</label><input id="mo">
+ <div class="card" style="margin:12px 0 0"><div class="m">Indemnité kilométrique</div><div class="big" id="ki">0,00 €</div><div class="m" id="kd2"></div></div>
+ <button onclick="saveK()">Enregistrer</button></div></section>
+
+<section id="p"><div class="card">
+ <label>Nom du salarié</label><input id="pn" onchange="sp()">
+ <label>Puissance fiscale (CV) — carte grise, case P.6</label>
+ <select id="pc" onchange="sp()"><option value="3">3 CV et moins</option><option>4</option><option>5</option><option>6</option><option value="7">7 CV et plus</option></select>
+ <label>Véhicule 100 % électrique (+20 %)</label><select id="pe" onchange="sp()"><option value="0">Non</option><option value="1">Oui</option></select>
+ <label>Km professionnels déjà parcourus cette année (hors app)</label><input id="p0" inputmode="decimal" onchange="sp()">
+ <button class="s" onclick="if(confirm('Tout effacer ?')){S.n=[];sv();rl()}">Effacer toutes les notes</button>
+ <p class="m">Barème fiscal kilométrique 2026 (identique 2023-2025). Le calcul tient compte du cumul annuel de kilomètres, comme le barème l'exige.</p></div></section>
+
+<nav><a class="on" onclick="go('l',this)">Notes</a><a onclick="go('t',this)">Ticket</a><a onclick="go('k',this)">Km</a><a onclick="go('p',this)">Profil</a></nav>
+
+<script>
+const $=i=>document.getElementById(i),E=v=>(+v||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}),N=v=>parseFloat(String(v||'').replace(',','.'))||0;
+const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S={n:[],p:{nom:'',cv:5,el:0,k0:0}},img='';
+try{S=JSON.parse(localStorage.getItem('ndf'))||S}catch(e){}
+function sv(){try{localStorage.setItem('ndf',JSON.stringify(S))}catch(e){alert('Stockage plein : supprimez d\'anciennes notes.')}}
+// Barème fiscal voitures : [taux<=5000, taux tranche2, forfait tranche2, taux>20000]
+const B={3:[.529,.316,1065,.370],4:[.606,.340,1330,.407],5:[.636,.357,1395,.427],6:[.665,.374,1457,.447],7:[.697,.394,1515,.470]};
+function f(d,cv,el){const b=B[cv];let v=d<=5000?d*b[0]:d<=20000?d*b[1]+b[2]:d*b[3];return v*(el?1.2:1)}
+function cum(y){return N(S.p.k0)+S.n.filter(n=>n.t=='Km'&&n.d.slice(0,4)==y).reduce((a,n)=>a+n.km,0)}
+function go(id,a){document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==id));document.querySelectorAll('nav a').forEach(x=>x.classList.toggle('on',x==a));if(id=='l')rl()}
+function sp(){S.p={nom:$('pn').value,cv:+$('pc').value,el:+$('pe').value,k0:N($('p0').value)};sv();ik()}
+function fill(){let h=N($('ht').value),v=N($('tv').value),t=N($('tt').value);
+ if(t&&h&&!v)v=t-h;else if(t&&v&&!h)h=t-v;else if(h&&v&&!t)t=h+v;
+ [['ht',h],['tv',v],['tt',t]].forEach(([i,x])=>{if(x)$(i).value=x.toFixed(2).replace('.',',')})}
+// Photo : réduction de l'image puis stockage
+$('ph').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const im=new Image();im.onload=()=>{const k=Math.min(1,1400/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);img=c.toDataURL('image/jpeg',.7);$('pv').src=img;$('pv').hidden=false};im.src=URL.createObjectURL(fl)};
+async function ocr(){
+ if(!img)return $('st').textContent='Prenez d\'abord une photo.';
+ try{$('st').textContent='Chargement de l\'OCR…';
+ if(!window.Tesseract)await new Promise((r,j)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=r;s.onerror=j;document.head.appendChild(s)});
+ const w=await Tesseract.createWorker('fra',1,{logger:m=>{if(m.status=='recognizing text')$('st').textContent='Lecture… '+Math.round(m.progress*100)+' %'}});
+ const {data}=await w.recognize(img);await w.terminate();parse(data.text);$('st').textContent='Vérifiez les montants lus avant d\'enregistrer.'
+ }catch(e){$('st').textContent='OCR indisponible (connexion ?). Saisissez les montants à la main.'}}
+function parse(tx){
+ const am=l=>[...l.matchAll(/(\d{1,3}(?:[ .]\d{3})*|\d+)[,.](\d{2})(?!\d)/g)].map(m=>N(m[1].replace(/[ .]/g,'')+'.'+m[2]));
+ const L=tx.split('\n');let all=am(tx),ttc=0,ht=0,tva=0;
+ for(const l of L){const a=am(l),x=a[a.length-1];if(!a.length)continue;
+  if(/\bht\b|hors taxe/i.test(l)&&!ht)ht=x;
+  else if(/tva/i.test(l)&&!/total/i.test(l)){if(!tva||x<tva)tva=x}
+  else if(/total|ttc|à payer|a payer|net|montant/i.test(l))ttc=Math.max(ttc,x)}
+ if(!ttc)ttc=Math.max(0,...all);
+ if(ttc&&ht&&!tva)tva=ttc-ht;if(ttc&&tva&&!ht)ht=ttc-tva;
+ [['ht',ht],['tv',tva],['tt',ttc]].forEach(([i,x])=>{if(x)$(i).value=x.toFixed(2).replace('.',',')});fill()}
+function saveT(){const t=N($('tt').value);if(!t)return alert('Montant TTC requis.');
+ S.n.unshift({id:Date.now(),t:$('ty').value,d:$('dt').value,ht:N($('ht').value),tva:N($('tv').value),ttc:t,cm:$('cm').value,img});
+ sv();['ht','tv','tt','cm'].forEach(i=>$(i).value='');$('pv').hidden=true;img='';$('ph').value='';$('st').textContent='';go('l',document.querySelector('nav a'))}
+// Distance : géocodage Nominatim + itinéraire OSRM
+async function geo(q){const r=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q))).json();if(!r[0])throw q;return r[0].lon+','+r[0].lat}
+async function route(){
+ try{$('ks').textContent='Calcul de l\'itinéraire…';
+ const [a,b]=await Promise.all([geo($('a1').value),geo($('a2').value)]);
+ const r=await(await fetch(`https://router.project-osrm.org/route/v1/driving/${a};${b}?overview=false`)).json();
+ let km=r.routes[0].distance/1000*($('ar').checked?2:1);$('km').value=km.toFixed(1).replace('.',',');$('ks').textContent='Distance routière calculée (OpenStreetMap).';ik()
+ }catch(e){$('ks').textContent='Adresse introuvable ou service indisponible : saisissez les km à la main.'}}
+function ik(){const km=N($('km').value),y=($('kd').value||'').slice(0,4)||new Date().getFullYear(),c=cum(y),p=S.p;
+ const v=km?f(c+km,p.cv,p.el)-f(c,p.cv,p.el):0;$('ki').textContent=E(v)+' €';
+ $('kd2').textContent=`${p.cv>=7?'7 CV et plus':p.cv+' CV'}${p.el?' électrique':''} · cumul annuel avant ce trajet : ${E(c)} km`;return v}
+function saveK(){const km=N($('km').value);if(!km)return alert('Kilomètres requis.');
+ S.n.unshift({id:Date.now(),t:'Km',d:$('kd').value,km,ttc:+ik().toFixed(2),ht:0,tva:0,cm:`${$('a1').value} → ${$('a2').value}${$('ar').checked?' (A/R)':''} — ${$('mo').value}`,cv:S.p.cv});
+ sv();['a1','a2','km','mo'].forEach(i=>$(i).value='');$('ks').textContent='';go('l',document.querySelector('nav a'))}
+function rl(){$('tot').textContent=E(S.n.reduce((a,n)=>a+n.ttc,0))+' €';
+ $('list').innerHTML=S.n.map(n=>`<div class="card"><div class="it"><b>${esc(n.t)} · ${E(n.ttc)} €</b><button class="d" onclick="del(${n.id})">✕</button></div>
+ <div class="m">${esc(n.d)} ${n.t=='Km'?'· '+E(n.km)+' km':n.tva?'· HT '+E(n.ht)+' · TVA '+E(n.tva):''}</div><div class="m">${esc(n.cm)}</div>${n.img?`<img class="pv" src="${n.img}" style="max-height:120px">`:''}</div>`).join('')||'<p class="m" style="text-align:center">Aucune note. Ajoutez un ticket ou un trajet.</p>'}
+function del(id){S.n=S.n.filter(n=>n.id!=id);sv();rl()}
+function csv(){const h='Date;Type;HT;TVA;TTC;Km;Détail\n',r=S.n.map(n=>[n.d,n.t,n.ht,n.tva,n.ttc,n.km||'',n.cm].map(v=>typeof v=='number'?String(v).replace('.',','):'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+h+r],{type:'text/csv'}));a.download='notes-de-frais-'+(S.p.nom||'salarie')+'.csv';a.click()}
+$('dt').value=$('kd').value=new Date().toISOString().slice(0,10);$('kd').onchange=ik;
+$('pn').value=S.p.nom;$('pc').value=S.p.cv;$('pe').value=S.p.el;$('p0').value=S.p.k0||'';rl();ik();
+</script></body></html>
